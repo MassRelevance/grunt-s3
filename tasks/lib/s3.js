@@ -439,27 +439,33 @@ exports.init = function (grunt) {
           return dfd.resolve(util.format(MSG_SKIP_MATCHES, prettySrc));
         }
 
-        fs.stat( src, function(err, stats) {
-          var remoteWhen, localWhen, upload;
+        if (options.verifyTimestamp) {
+          fs.stat( src, function(err, stats) {
+            var remoteWhen, localWhen, upload;
 
-          if (err) {
-            return dfd.reject(makeError(MSG_ERR_UPLOAD, prettySrc, err));
-          }
+            if (err) {
+              return dfd.reject(makeError(MSG_ERR_UPLOAD, prettySrc, err));
+            }
 
-          // which one is newer? if local is newer, we should upload it
-          remoteWhen = new Date(res.headers['last-modified'] || "0"); // earliest date possible if no header is returned
-          localWhen = new Date(stats.mtime || "1"); // make second earliest date possible if mtime isn't set
+            // which one is newer? if local is newer, we should upload it
+            remoteWhen = new Date(res.headers['last-modified'] || "0"); // earliest date possible if no header is returned
+            localWhen = new Date(stats.mtime || "1"); // make second earliest date possible if mtime isn't set
 
-          if ( localWhen <= remoteWhen ) {
-            // Remote file was older
-            return dfd.resolve(util.format(MSG_SKIP_OLDER, prettySrc));
-          }
+            if ( localWhen <= remoteWhen ) {
+              // Remote file was older
+              return dfd.resolve(util.format(MSG_SKIP_OLDER, prettySrc));
+            }
 
-          // default is that local is newer, only upload when it is
+            // default is that local is newer, only upload when it is
+            upload = exports.upload( src, dest, opts);
+            // pass through the dfd state
+            upload.then( dfd.resolve, dfd.reject );
+          });
+        }
+        else {
           upload = exports.upload( src, dest, opts);
-          // pass through the dfd state
           upload.then( dfd.resolve, dfd.reject );
-        });
+        }
       });
     }).end();
 
