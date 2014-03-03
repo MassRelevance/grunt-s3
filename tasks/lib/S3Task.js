@@ -58,18 +58,36 @@ S3Task.prototype = {
       async.forEach.bind(async,transfers);
 
     eachTransfer(function (transferFn, completed){
-      var transfer = transferFn();
+      var retryCount = 0;
 
-      transfer.done(function (msg) {
-        grunt.log.ok(msg);
-        completed();
-      });
+      function transferTry (cb) {
+        var transfer = transferFn();
+        transfer.done(function (msg) {
+          grunt.log.ok(msg);
+          cb();
+        });
 
-      transfer.fail(function (msg) {
-        grunt.log.error(msg);
-        ++errors;
-        completed();
-      });
+        transfer.fail(function (msg) {
+          grunt.log.error(msg);
+          cb(true);
+        });
+      }
+
+      function transferCallback (error) {
+        if (error) {
+          if (retryCount < config.maxRetries) {
+            ++retryCount;
+            transferTry(transferCallback);
+          } else {
+            ++errors;
+            completed();
+          }
+        } else {
+          completed();
+        }
+      }
+
+      transferTry(transferCallback);
 
     }, function () {
       done(!errors);
@@ -137,7 +155,8 @@ S3Task.prototype = {
       debug: false,
       verify: false,
       maxOperations: 0,
-      encodePaths: false
+      encodePaths: false,
+      maxRetries: 0
     };
 
     // Grab the actions to perform from the task data, default to empty arrays
