@@ -159,7 +159,9 @@ exports.init = function (grunt) {
             }
           });
         }
-        res.resume();
+        if (res) {
+          res.resume();
+        }
       });
     };
 
