@@ -129,7 +129,7 @@ exports.init = function (grunt) {
       cb = cb || function () {};
 
       // Upload the file to s3.
-      client.putFile(src, dest, headers, function (err, res) {
+      var knoxReq = client.putFile(src, dest, headers, function (err, res) {
         // If there was an upload error or any status other than a 200, we
         // can assume something went wrong.
         if (err || res.statusCode !== 200) {
@@ -162,6 +162,9 @@ exports.init = function (grunt) {
         if (res) {
           res.resume();
         }
+      });
+      knoxReq.once('error', function (err) {
+        cb(makeError(MSG_ERR_UPLOAD, prettySrc, err || 'unknown'));
       });
     };
 
@@ -250,7 +253,7 @@ exports.init = function (grunt) {
     var file = fs.createWriteStream(dest);
 
     // Upload the file to s3.
-    client.getFile(src, function (err, res) {
+    var knoxReq = client.getFile(src, function (err, res) {
       // If there was an upload error or any status other than a 200, we
       // can assume something went wrong.
       if (err || res.statusCode !== 200) {
@@ -291,6 +294,9 @@ exports.init = function (grunt) {
           });
         });
     });
+    knoxReq.once('error', function (err) {
+      dfd.reject(makeError(MSG_ERR_DOWNLOAD, src, err || 'unknown'));
+    });
 
     return dfd.promise();
   };
@@ -329,6 +335,10 @@ exports.init = function (grunt) {
     // Copy the src file to dest.
     var req = client.put(dest, headers);
 
+    req.once('error', function (err) {
+      dfd.reject(makeError(MSG_ERR_COPY, src, dest));
+    });
+
     req.on('response', function (res) {
       if (res.statusCode !== 200) {
         dfd.reject(makeError(MSG_ERR_COPY, src, dest));
@@ -361,13 +371,16 @@ exports.init = function (grunt) {
     }
 
     // Upload the file to this endpoint.
-    client.deleteFile(src, function (err, res) {
+    var req = client.deleteFile(src, function (err, res) {
       if (err || res.statusCode !== 204) {
         dfd.reject(makeError(MSG_ERR_DELETE, src, err || res.statusCode));
       }
       else {
         dfd.resolve(util.format(MSG_DELETE_SUCCESS, src));
       }
+    });
+    req.once('error', function (err) {
+      dfd.reject(makeError(MSG_ERR_DELETE, src, err || 'unknown'));
     });
 
     return dfd.promise();
@@ -401,7 +414,7 @@ exports.init = function (grunt) {
 
     // Check for the file on s3
     // verify was truthy, so we need to make sure that this file is actually the file it thinks it is
-    client.headFile( dest, function(err, res) {
+    var knoxReq = client.headFile( dest, function(err, res) {
       var upload;
 
       // If the file was not found, then we should be able to continue with a normal upload procedure
@@ -469,7 +482,13 @@ exports.init = function (grunt) {
           upload.then( dfd.resolve, dfd.reject );
         }
       });
-    }).end();
+    });
+
+    knoxReq.once('error', function (err) {
+      dfd.reject(makeError(MSG_ERR_DOWNLOAD, prettySrc, err || 'unknown'));
+    });
+
+    knoxReq.end();
 
     return dfd.promise();
   };
